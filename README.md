@@ -1,6 +1,6 @@
 # CAPEX y OPEX 2026
 
-MVP 0.1.2 para 14 Técnicas Sucursales. Aplicación estática para GitHub Pages.
+MVP 0.1.3 para 14 Técnicas Sucursales. Aplicación estática para GitHub Pages.
 
 ## Prueba local
 
@@ -19,6 +19,8 @@ Abre http://localhost:8000. La app requiere que los archivos se sirvan por HTTP.
 3. Usa **Editar** para corregir una acción. Las acciones guardadas permanecen en el navegador por sucursal. Usa **Descargar borrador** y **Subir borrador** para trasladar la planificación en formato JSON.
 4. **Limpiar todo** borra la planificación local de la sucursal seleccionada tras pedir confirmación.
 5. Carga el **FORMATO CAPEX OPEX 2026v2.xlsx** original en blanco. Abre **Ver vista previa** y descarga el Excel individual. Usa ese Excel para la entrega al revisor.
+
+**Cerrar sesión** vuelve al selector inicial. La jefatura puede guardar el borrador en el navegador o revisar y descargar el Excel v2 antes de salir. Si hay una acción abierta, debe guardarla o cancelar su edición. El administrador vuelve al selector con **Cerrar sesión**.
 
 ## Flujo de revisión
 

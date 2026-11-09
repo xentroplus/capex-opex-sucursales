@@ -10,7 +10,7 @@ const rateLabels = {tecnicoMes:'Costo mensual por técnico',coordinadorMes:'Cost
 // This gate separates screens in the static MVP. GitHub permissions govern publication.
 const adminDigest = '3e81deb0c821d39bbddb1bef92f651287e5f2b670eb7dc893ba4f095028ffa51';
 let published, branch, draft, template, editing = null, previewDeliveries = [], view = 'branch';
-let admin = false, planning = false;
+let admin = false, planning = false, exitAfterExport = false;
 const received = new Map();
 const show = (message, error = false) => {
   $('status').textContent = message;
@@ -38,7 +38,9 @@ function download(name,data,type) {
 function persist(next) {
   localStorage.setItem(storageKey(next.branch),JSON.stringify(next));
   draft = next;
-  closePreview(); drawActions();
+  closePreview();
+  $('exit-options').hidden = true;
+  drawActions();
 }
 function newDraft() { return {schema:1,year:2026,branch:branch.name,parameters:published,actions:[]}; }
 function selectView(next) {
@@ -51,7 +53,15 @@ function selectView(next) {
   $('template-card').hidden = next === 'settings' || (next === 'branch' && !planning);
   if (next === 'review') drawReview();
 }
+function returnToStart(message = '') {
+  $('branch-select').value = '';
+  selectView('branch');
+  selectBranch();
+  $('branch-select').focus();
+  show(message);
+}
 function selectBranch() {
+  $('exit-options').hidden = true;
   branch = branches.find(item => item.name === $('branch-select').value);
   planning = false;
   draft = undefined; closeEditor(); closePreview(); show('');
@@ -173,7 +183,12 @@ function drawReview() {
   $('review-list').replaceChildren(element('p',received.size + ' de 14 sucursales recibidas','totals'),table(['Sucursal','Entrega'],data));
   $('preview-review').disabled = !received.size;
 }
-function closePreview() { $('preview').hidden = true; previewDeliveries = []; }
+function closePreview() {
+  $('preview').hidden = true;
+  previewDeliveries = [];
+  exitAfterExport = false;
+  $('export').textContent = 'Descargar Excel v2';
+}
 function preview(deliveries) {
   previewDeliveries = deliveries;
   const rows = [];
@@ -228,9 +243,43 @@ async function init() {
   $('admin-exit').onclick = () => {
     admin = false; received.clear();
     $('parameters-form').reset();
-    $('branch-select').value = '';
-    selectView('branch'); selectBranch();
+    returnToStart();
   };
+  $('branch-exit').onclick = run(() => {
+    if (!$('edit-card').hidden) {
+      $('edit-card').scrollIntoView({block:'nearest'});
+      throw Error('Guarda la acción abierta o cancela su edición antes de cerrar sesión.');
+    }
+    if (!draft.actions.length) {
+      returnToStart();
+      return;
+    }
+    closePreview();
+    show('');
+    $('exit-options').hidden = false;
+    $('save-and-exit').focus();
+  });
+  $('cancel-exit').onclick = () => {
+    $('exit-options').hidden = true;
+    $('branch-exit').focus();
+  };
+  $('save-and-exit').onclick = run(() => {
+    if (!$('edit-card').hidden) throw Error('Guarda la acción abierta o cancela su edición antes de salir.');
+    persist(draft);
+    returnToStart('Borrador de '+branch.name+' guardado en este navegador.');
+  });
+  $('excel-and-exit').onclick = run(() => {
+    if (!$('edit-card').hidden) throw Error('Guarda la acción abierta o cancela su edición antes de revisar el Excel.');
+    if (!template) {
+      startPlanning(false);
+      $('template-file').focus();
+      throw Error('Carga la plantilla oficial v2 en blanco y vuelve a elegir Revisar Excel y salir.');
+    }
+    if (!draft.actions.length) throw Error('Agrega una acción antes de generar el Excel.');
+    preview([{branch,rows:excelRows(draft)}]);
+    exitAfterExport = true;
+    $('export').textContent = 'Descargar Excel v2 y salir';
+  });
   $('start-planning').onclick = run(() => {
     if (!$('edit-card').hidden) return;
     startPlanning();
@@ -316,9 +365,12 @@ async function init() {
     const snapshot = previewDeliveries;
     if (!template || !snapshot.length || (view==='review' && snapshot.length!==14)) return;
     const name = view==='review' ? 'CAPEX_OPEX_2026_Consolidado.xlsx' : 'CAPEX_OPEX_2026_'+branch.name+'.xlsx';
+    const shouldExit = exitAfterExport;
     const data = await writeWorkbook(template,snapshot,JSZip);
+    if (previewDeliveries !== snapshot) return;
     download(name,data,'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-    show('Excel generado correctamente.');
+    if (shouldExit) returnToStart('Excel generado. El borrador queda guardado en este navegador.');
+    else show('Excel generado correctamente.');
   });
   $('parameters-form').onsubmit = run(event => {
     event.preventDefault();
