@@ -58,7 +58,7 @@ function selectBranch() {
   $('greeting').textContent = branch ? 'Bienvenido, ' + branch.manager : '';
   $('planning').hidden = $('template-card').hidden = true;
   $('branch-controls').hidden = !branch;
-  $('admin-login').hidden = $('branch-select').value !== 'Administrador';
+  $('admin-login').hidden = $('branch-select').value !== 'admin';
   $('admin-login').reset();
   $('update-rates').hidden = true;
   if (!branch) return;
@@ -213,7 +213,6 @@ async function init() {
   published = await response.json();
   validateDraft({schema:1,year:2026,branch:branches[0].name,parameters:published,actions:[]},branches[0],published);
   for (const b of branches) $('branch-select').add(new Option(b.name));
-  $('branch-select').add(new Option('Administrador'));
   selectView('branch'); drawParameters();
   $('admin-login').onsubmit = run(async event => {
     event.preventDefault();
@@ -221,7 +220,7 @@ async function init() {
     const input = new TextEncoder().encode(password.value);
     password.value = '';
     const digest = await crypto.subtle.digest('SHA-256',input);
-    if ($('branch-select').value !== 'Administrador') return;
+    if ($('branch-select').value !== 'admin') return;
     const hex = Array.from(new Uint8Array(digest),byte => byte.toString(16).padStart(2,'0')).join('');
     if (hex !== adminDigest) throw Error('La clave de administrador es incorrecta.');
     admin = true; selectView('settings');
