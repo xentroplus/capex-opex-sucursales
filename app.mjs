@@ -7,7 +7,10 @@ const rateLabels = {tecnicoMes:'Costo mensual por técnico',coordinadorMes:'Cost
   cajasDia:'Cajas por día en ruta urbana',kmMangaInterurbana:'Kilómetros por manga interurbana',
   kmCertificacionDia:'Kilómetros certificados por día',diasOdfUrbano48:'Días de ODF urbano en 48 hilos',
   diasOdfUrbanoOtros:'Días de ODF urbano en otros tipos',diasOdfRutaNueva:'Días de ODF en ruta interurbana nueva'};
+// This gate separates screens in the static MVP. GitHub permissions govern publication.
+const adminDigest = '3e81deb0c821d39bbddb1bef92f651287e5f2b670eb7dc893ba4f095028ffa51';
 let published, branch, draft, template, editing = null, previewDeliveries = [], view = 'branch';
+let admin = false, planning = false;
 const received = new Map();
 const show = (message, error = false) => {
   $('status').textContent = message;
@@ -39,20 +42,24 @@ function persist(next) {
 }
 function newDraft() { return {schema:1,year:2026,branch:branch.name,parameters:published,actions:[]}; }
 function selectView(next) {
+  if (next !== 'branch' && !admin) return;
   view = next;
   closePreview(); show('');
   document.querySelectorAll('.view').forEach(section => section.hidden = section.id !== next);
   document.querySelectorAll('nav button').forEach(item => item.setAttribute('aria-current',item.dataset.view === next ? 'page' : 'false'));
-  $('template-card').hidden = next === 'settings' || (next === 'branch' && !branch);
+  $('admin-nav').hidden = !admin;
+  $('template-card').hidden = next === 'settings' || (next === 'branch' && !planning);
   if (next === 'review') drawReview();
 }
 function selectBranch() {
   branch = branches.find(item => item.name === $('branch-select').value);
+  planning = false;
   draft = undefined; closeEditor(); closePreview(); show('');
   $('greeting').textContent = branch ? 'Bienvenido, ' + branch.manager : '';
-  $('planning').hidden = $('template-card').hidden = !branch;
-  $('upload-draft').disabled = !branch;
-  $('download-draft').disabled = !branch;
+  $('planning').hidden = $('template-card').hidden = true;
+  $('branch-controls').hidden = !branch;
+  $('admin-login').hidden = $('branch-select').value !== 'Administrador';
+  $('admin-login').reset();
   $('update-rates').hidden = true;
   if (!branch) return;
   draft = newDraft();
@@ -61,6 +68,12 @@ function selectBranch() {
     if (saved) draft = validateDraft(JSON.parse(saved),branch,published);
   } catch { show('El borrador guardado no pudo recuperarse. Puedes subir una copia del borrador.',true); }
   drawActions();
+}
+function startPlanning(openFirstAction = true) {
+  planning = true;
+  $('planning').hidden = $('template-card').hidden = false;
+  if (openFirstAction && !draft.actions.length) openEditor();
+  else $('planning').scrollIntoView({block:'nearest'});
 }
 function inputLabel(label,name,value,{step='any',min=0,type='number',options} = {}) {
   const container = element('label',label);
@@ -147,6 +160,8 @@ function drawActions() {
   $('draft-info').textContent = `${rows.length} de ${branch.end-branch.start+1} acciones · Parámetros ${draft.parameters.version} · CAPEX ${fmt.format(capex)} · OPEX ${fmt.format(opex)}`;
   $('update-rates').hidden = draft.parameters.version === published.version;
   $('preview-branch').disabled = !rows.length;
+  $('download-draft').disabled = !rows.length;
+  $('start-planning').textContent = rows.length ? 'Continuar planificación' : 'Iniciar planificación';
   $('add-action').disabled = rows.length >= branch.end - branch.start + 1;
   $('actions').replaceChildren(rows.length ? table(['Trimestre','Tipo','Ciudad','Acción','CAPEX','OPEX',''],rows.map((row,index) => [
     row.quarter+'Q',titles[draft.actions[index].kind],row.city,row.description,row.capex,row.opex,
@@ -198,7 +213,36 @@ async function init() {
   published = await response.json();
   validateDraft({schema:1,year:2026,branch:branches[0].name,parameters:published,actions:[]},branches[0],published);
   for (const b of branches) $('branch-select').add(new Option(b.name));
+  $('branch-select').add(new Option('Administrador'));
   selectView('branch'); drawParameters();
+  $('admin-login').onsubmit = run(async event => {
+    event.preventDefault();
+    const password = $('admin-password');
+    const input = new TextEncoder().encode(password.value);
+    password.value = '';
+    const digest = await crypto.subtle.digest('SHA-256',input);
+    if ($('branch-select').value !== 'Administrador') return;
+    const hex = Array.from(new Uint8Array(digest),byte => byte.toString(16).padStart(2,'0')).join('');
+    if (hex !== adminDigest) throw Error('La clave de administrador es incorrecta.');
+    admin = true; selectView('settings');
+  });
+  $('admin-exit').onclick = () => {
+    admin = false; received.clear();
+    $('parameters-form').reset();
+    $('branch-select').value = '';
+    selectView('branch'); selectBranch();
+  };
+  $('start-planning').onclick = run(() => {
+    if (!$('edit-card').hidden) return;
+    startPlanning();
+  });
+  $('clear-planning').onclick = run(() => {
+    if (!confirm('¿Eliminar toda la planificación de '+branch.name+' de este navegador? Esta acción no se puede deshacer.')) return;
+    persist(newDraft()); closeEditor();
+    planning = false;
+    $('planning').hidden = $('template-card').hidden = true;
+    show('Planificación de '+branch.name+' eliminada.');
+  });
   document.querySelectorAll('nav button').forEach(node => node.onclick = () => selectView(node.dataset.view));
   $('branch-select').onchange = run(selectBranch);
   $('upload-draft').onclick = () => $('draft-file').click();
@@ -206,9 +250,12 @@ async function init() {
   $('draft-file').onchange = run(async event => {
     const file = event.target.files[0]; event.target.value = '';
     if (!file) return;
-    const next = validateDraft(JSON.parse(await file.text()),branch,published);
+    const selected = branch;
+    const contents = await file.text();
+    if (selected !== branch) return;
+    const next = validateDraft(JSON.parse(contents),branch,published);
     if ((draft.actions.length || !$('edit-card').hidden) && !confirm('¿Reemplazar el borrador local y cualquier edición abierta?')) return;
-    persist(next); closeEditor(); show('Borrador cargado correctamente.');
+    persist(next); closeEditor(); startPlanning(false); show('Borrador cargado correctamente.');
   });
   $('update-rates').onclick = run(() => {
     if (!$('edit-card').hidden) throw Error('Guarda o cancela la acción abierta antes de cambiar los parámetros.');
@@ -276,6 +323,7 @@ async function init() {
   });
   $('parameters-form').onsubmit = run(event => {
     event.preventDefault();
+    if (!admin) return;
     const values = new FormData(event.target);
     const next = {version:String(values.get('version')).trim(),partidas:{},opex:{}};
     if (next.version===published.version) throw Error('Indica una versión diferente de la publicada.');
