@@ -1,6 +1,6 @@
 # CAPEX y OPEX 2026
 
-MVP 0.1.3 para 14 Técnicas Sucursales. Aplicación estática para GitHub Pages.
+MVP 0.1.4 para 14 Técnicas Sucursales. Aplicación estática para GitHub Pages.
 
 ## Prueba local
 

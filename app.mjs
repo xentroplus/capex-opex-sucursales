@@ -48,7 +48,7 @@ function selectView(next) {
   view = next;
   closePreview(); show('');
   document.querySelectorAll('.view').forEach(section => section.hidden = section.id !== next);
-  document.querySelectorAll('nav button').forEach(item => item.setAttribute('aria-current',item.dataset.view === next ? 'page' : 'false'));
+  document.querySelectorAll('#admin-nav button[data-view]').forEach(item => item.setAttribute('aria-current',item.dataset.view === next ? 'page' : 'false'));
   $('admin-nav').hidden = !admin;
   $('template-card').hidden = next === 'settings' || (next === 'branch' && !planning);
   if (next === 'review') drawReview();
@@ -291,7 +291,7 @@ async function init() {
     $('planning').hidden = $('template-card').hidden = true;
     show('Planificación de '+branch.name+' eliminada.');
   });
-  document.querySelectorAll('nav button').forEach(node => node.onclick = () => selectView(node.dataset.view));
+  document.querySelectorAll('#admin-nav button[data-view]').forEach(node => node.onclick = () => selectView(node.dataset.view));
   $('branch-select').onchange = run(selectBranch);
   $('upload-draft').onclick = () => $('draft-file').click();
   $('download-draft').onclick = () => download('Borrador_'+branch.name+'_2026.json',JSON.stringify(draft,null,2),'application/json');
