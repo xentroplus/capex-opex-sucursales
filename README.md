@@ -1,6 +1,6 @@
 # CAPEX y OPEX 2026
 
-MVP 0.1.4 para 14 Técnicas Sucursales. Aplicación estática para GitHub Pages.
+MVP 0.1.6 para 14 Técnicas Sucursales. Aplicación estática para GitHub Pages.
 
 ## Prueba local
 
@@ -24,7 +24,7 @@ Abre http://localhost:8000. La app requiere que los archivos se sirvan por HTTP.
 
 ## Flujo de revisión
 
-Selecciona **admin**, ingresa la clave de prueba entregada con esta versión y abre **Consolidar entregas Excel**. Carga la plantilla original en blanco y luego los Excel de las sucursales. La app valida el formato y el detalle trimestral. Una entrega corregida puede reemplazar la anterior con confirmación. Puedes previsualizar con una parte de las entregas. La descarga del consolidado se habilita al completar las 14. Conserva los Excel de origen hasta terminar la revisión, ya que la lista de importaciones se mantiene durante la sesión.
+Selecciona **admin**, ingresa la clave de prueba entregada con esta versión y abre **Consolidar entregas Excel**. Carga la plantilla original en blanco y luego los Excel de las sucursales. La app valida el formato y el detalle trimestral. Una entrega corregida puede reemplazar la anterior con confirmación. Puedes previsualizar y descargar el consolidado desde la primera entrega válida. Los cortes con menos de 14 sucursales llevan PARCIAL y el número de entregas en el nombre. **Limpiar todo** reinicia las entregas importadas tras pedir confirmación y conserva la plantilla v2 cargada. Conserva los Excel de origen hasta terminar la revisión, ya que la lista de importaciones se mantiene durante la sesión.
 
 ## Parámetros y publicación
 

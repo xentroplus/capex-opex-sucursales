@@ -12,6 +12,7 @@ const adminDigest = '3e81deb0c821d39bbddb1bef92f651287e5f2b670eb7dc893ba4f095028
 let published, branch, draft, template, editing = null, previewDeliveries = [], view = 'branch';
 let admin = false, planning = false, exitAfterExport = false;
 const received = new Map();
+let deliveriesRevision = 0;
 const show = (message, error = false) => {
   $('status').textContent = message;
   $('status').hidden = !message;
@@ -182,6 +183,7 @@ function drawReview() {
   const data = branches.map(b => [b.name,received.has(b.name) ? 'Recibido · ' + received.get(b.name).rows.length + ' acciones' : 'Pendiente']);
   $('review-list').replaceChildren(element('p',received.size + ' de 14 sucursales recibidas','totals'),table(['Sucursal','Entrega'],data));
   $('preview-review').disabled = !received.size;
+  $('clear-deliveries').disabled = !received.size;
 }
 function closePreview() {
   $('preview').hidden = true;
@@ -208,9 +210,9 @@ function preview(deliveries) {
     'Tareas OC CAPEX','Total Trimestres CAPEX','Total anual CAPEX','Valor 1Q OPEX','Valor 2Q OPEX','Valor 3Q OPEX','Valor 4Q OPEX',
     'Tareas OC OPEX','Total Trimestres OPEX','Total anual OPEX'];
   $('preview-table').replaceChildren(table(headers,rows,'preview-data'));
-  $('preview-title').textContent = view==='review' ? 'Vista previa del consolidado' : 'Vista previa · ' + branch.name;
-  $('export').disabled = !template || (view==='review' && deliveries.length!==14);
-  $('export').title = !template ? 'Carga la plantilla v2 original' : view==='review' && deliveries.length!==14 ? 'Faltan entregas' : '';
+  $('preview-title').textContent = view==='review' ? 'Vista previa del consolidado · '+deliveries.length+' de '+branches.length : 'Vista previa · ' + branch.name;
+  $('export').disabled = !template || !deliveries.length;
+  $('export').title = !template ? 'Carga la plantilla v2 original' : '';
   $('preview').hidden = false; $('preview').scrollIntoView({block:'nearest'});
 }
 function drawParameters() {
@@ -242,6 +244,7 @@ async function init() {
   });
   $('admin-exit').onclick = () => {
     admin = false; received.clear();
+    deliveriesRevision++;
     $('parameters-form').reset();
     returnToStart();
   };
@@ -347,24 +350,43 @@ async function init() {
     if (!template) throw Error('Carga primero la plantilla oficial v2 en blanco.');
     $('deliveries-file').click();
   });
+  $('clear-deliveries').onclick = () => {
+    if (!admin || !received.size || !confirm('¿Limpiar todas las entregas importadas? Podrás volver a cargar los archivos Excel.')) return;
+    deliveriesRevision++;
+    received.clear();
+    $('deliveries-file').value = '';
+    closePreview();
+    drawReview();
+    show('Entregas eliminadas. Puedes importar los Excel de nuevo.');
+  };
   $('deliveries-file').onchange = run(async event => {
     const files = [...event.target.files]; event.target.value='';
+    const revision = deliveriesRevision;
     closePreview(); const errors = []; let imported=0;
     for (const file of files) {
       try {
         const wb = await loadWorkbook(await file.arrayBuffer(),JSZip);
+        if (revision !== deliveriesRevision) return;
         const item = readDeliveries(wb,template);
         if (received.has(item.branch.name) && !confirm('¿Reemplazar la entrega de '+item.branch.name+'?')) continue;
         received.set(item.branch.name,item); imported++;
       } catch (error) { errors.push(file.name+' — '+error.message); }
     }
+    if (revision !== deliveriesRevision) return;
     drawReview(); show(imported+' entrega(s) importada(s). '+errors.join(' | '),!!errors.length);
   });
   $('preview-review').onclick = () => preview(branches.filter(b => received.has(b.name)).map(b => received.get(b.name)));
   $('export').onclick = run(async () => {
     const snapshot = previewDeliveries;
-    if (!template || !snapshot.length || (view==='review' && snapshot.length!==14)) return;
-    const name = view==='review' ? 'CAPEX_OPEX_2026_Consolidado.xlsx' : 'CAPEX_OPEX_2026_'+branch.name+'.xlsx';
+    if (!template || !snapshot.length) return;
+    let name;
+    if (view !== 'review') {
+      name = 'CAPEX_OPEX_2026_'+branch.name+'.xlsx';
+    } else if (snapshot.length === branches.length) {
+      name = 'CAPEX_OPEX_2026_Consolidado.xlsx';
+    } else {
+      name = 'Consolidado_CAPEX_OPEX_PARCIAL_'+snapshot.length+'_de_'+branches.length+'.xlsx';
+    }
     const shouldExit = exitAfterExport;
     const data = await writeWorkbook(template,snapshot,JSZip);
     if (previewDeliveries !== snapshot) return;
