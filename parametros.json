@@ -1,0 +1,33 @@
+{
+  "version": "2026.1",
+  "partidas": {
+    "Fibra 2 hilos (m)": 0.40,
+    "Fibra 6 hilos (m)": 1.63,
+    "Fibra 6 hilos ducto (m)": 1.80,
+    "Fibra 48 hilos (m)": 2.23,
+    "Fibra 48 hilos ducto (m)": 2.42,
+    "Fibra 144 hilos (m)": 3.42,
+    "Fibra 144 hilos ducto (m)": 3.60,
+    "Poste (unidad)": 305,
+    "Caja (unidad)": 63.44,
+    "Manga (unidad)": 78.99,
+    "ODF (unidad)": 68.64,
+    "Preformado (unidad)": 5.73,
+    "Abrazadera (unidad)": 10.73,
+    "Tendido (m)": 0.70,
+    "Instalación de caja (unidad)": 10
+  },
+  "opex": {
+    "tecnicoMes": 800,
+    "coordinadorMes": 1200,
+    "diasMes": 30,
+    "tecnicosUrbanos": 2,
+    "tecnicosInterurbanos": 3,
+    "cajasDia": 8,
+    "kmMangaInterurbana": 4,
+    "kmCertificacionDia": 16,
+    "diasOdfUrbano48": 1,
+    "diasOdfUrbanoOtros": 2,
+    "diasOdfRutaNueva": 2
+  }
+}
