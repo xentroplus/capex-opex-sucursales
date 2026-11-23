@@ -1,4 +1,4 @@
-export const VERSION = '0.1.7';
+export const VERSION = '0.1.8';
 export const branches = [
   ['Ambato','Diego Pilco'], ['Coca','Alberto Pincay'], ['Cuenca','Victor Heredia'], ['Esmeraldas','Gabriel Cedeño'],
   ['Ibarra','Ismael Andrade'], ['Lago Agrio','Lenin Vera'], ['Loja','Efrain Encarnación'], ['Machala','Genaro Merchan'],
@@ -7,9 +7,14 @@ export const branches = [
 ].map(([name, manager]) => ({ name, manager }));
 
 export const objectives = { crec:'Crecimiento Urbano / Interurbano', nodos:'Mejoramiento Infraestructura de Nodos' };
-export const kinds = { urbana:'Ruta urbana', interurbana:'Ruta interurbana', cajas:'Construcción de cajas' };
+export const kinds = { urbana:'Ruta urbana', interurbana:'Ruta interurbana', cajas:'Construcción de cajas',
+  nodo:'Construcción y/o migración de nodo', generador:'Instalación de generador' };
+export const kindsByObjective = { crec:['urbana','interurbana','cajas'], nodos:['nodo','generador'] };
+const nodeKinds = ['nodo','generador'];
+export const isNodeKind = kind => nodeKinds.includes(kind);
+const nodeDefaults = { nodoTecnicos:3, nodoDias:2, nodoDiasMax:4 };
 export const fibers = { '2 hilos':2, '6 hilos':6, '6 hilos ducto':6, '48 hilos':48, '48 hilos ducto':48, '144 hilos':144, '144 hilos ducto':144 };
-export const opexKeys = ['tecnicoMes','coordinadorMes','diasMes','tecnicos','cajasDia','diasOdf','certMax'];
+export const opexKeys = ['tecnicoMes','coordinadorMes','diasMes','tecnicos','cajasDia','diasOdf','certMax','nodoTecnicos','nodoDias','nodoDiasMax'];
 
 export const money = value => Math.round((value + Number.EPSILON) * 100) / 100;
 export const sum = values => money(values.reduce((total, value) => total + value, 0));
@@ -17,13 +22,21 @@ const isNumber = value => typeof value === 'number' && Number.isFinite(value) &&
 const isCount = value => Number.isInteger(value) && value >= 0;
 
 export const dayCost = p => (p.opex.tecnicos * p.opex.tecnicoMes + p.opex.coordinadorMes) / p.opex.diasMes;
+export const nodeDayCost = p => p.opex.nodoTecnicos * p.opex.tecnicoMes / p.opex.diasMes;
 
 // Replica la primera calculadora de Calculo OPEX y la hoja 2026 (CAPEX = fibra + postes).
 export function calculate(action, p) {
   const cq = [0,0,0,0], oq = [0,0,0,0], capexLines = [], opexLines = [];
   const perDay = dayCost(p);
-  let days = 0;
-  if (action.kind === 'cajas') {
+  let days = 0, dayValue = perDay;
+  if (isNodeKind(action.kind)) {
+    dayValue = nodeDayCost(p);
+    days = action.dias;
+    cq[action.quarter - 1] = money(action.capex);
+    oq[action.quarter - 1] = money(days * dayValue);
+    capexLines.push({ label:'Monto ingresado · ' + action.sustento.trim(), value:cq[action.quarter - 1] });
+    opexLines.push({ label:`Días de trabajo (${p.opex.nodoTecnicos} técnicos, sin coordinador)`, days });
+  } else if (action.kind === 'cajas') {
     const rate = p.capex.fibras['2 hilos'];
     action.q.forEach((item, i) => {
       if (!item.cajas && !item.metros) return;
@@ -52,11 +65,12 @@ export function calculate(action, p) {
   }
   const capex = sum(cq), opex = sum(oq);
   if (!isNumber(capex) || !isNumber(opex)) throw Error('Revisa las cantidades y los parámetros de la acción.');
-  return { cq, oq, capex, opex, days, perDay, capexLines, opexLines };
+  return { cq, oq, capex, opex, days, perDay:dayValue, capexLines, opexLines };
 }
 
 export function actionWarnings(action) {
   const w = [];
+  if (isNodeKind(action.kind)) return action.capex > 500000 ? ['El CAPEX supera $500.000. Revisa el monto.'] : w;
   if (action.kind === 'cajas') return w;
   if (action.metros > 150000) w.push('La longitud supera 150 km. Confirma que el dato está en metros.');
   if (action.metros > 0 && action.metros < 100) w.push('Menos de 100 m. La longitud se ingresa en metros, no en kilómetros.');
@@ -67,10 +81,16 @@ export function actionWarnings(action) {
 export function actionError(action, p) {
   const a = action ?? {};
   if (!Object.hasOwn(objectives, a.obj)) return 'Selecciona el objetivo estratégico.';
-  if (a.obj === 'nodos') return 'Mejoramiento Infraestructura de Nodos: regla de cálculo por definir.';
-  if (!Object.hasOwn(kinds, a.kind)) return 'Selecciona el tipo de trabajo.';
+  if (!kindsByObjective[a.obj].includes(a.kind)) return 'Selecciona el tipo de trabajo.';
   if (typeof a.city !== 'string' || !a.city.trim() || a.city.length > 120) return 'Ingresa la ciudad (acciones generales).';
   if (typeof a.description !== 'string' || !a.description.trim() || a.description.length > 1200) return 'Ingresa la acción específica.';
+  if (isNodeKind(a.kind)) {
+    if (![1,2,3,4].includes(a.quarter)) return 'Selecciona el trimestre.';
+    if (!isNumber(a.capex) || a.capex <= 0) return 'Ingresa el monto de CAPEX en dólares.';
+    if (typeof a.sustento !== 'string' || !a.sustento.trim() || a.sustento.length > 200) return 'Describe el sustento del CAPEX (material eléctrico, UPS, baterías…).';
+    if (!Number.isInteger(a.dias) || a.dias < 1 || a.dias > p.opex.nodoDiasMax) return `Los días de trabajo deben estar entre 1 y ${p.opex.nodoDiasMax}.`;
+    return '';
+  }
   if (a.kind === 'cajas') {
     if (!Array.isArray(a.q) || a.q.length !== 4 || a.q.some(x => !x || !isCount(x.cajas) || !isNumber(x.metros))) return 'Revisa las cajas (enteros) y los metros de cada trimestre.';
     if (!a.q.some(x => x.cajas > 0 || x.metros > 0)) return 'Ingresa cajas o metros en al menos un trimestre.';
@@ -94,6 +114,9 @@ export function parametersError(params, published) {
   if (opexKeys.some(k => !isNumber(params.opex[k]))) return 'Revisa los parámetros de OPEX.';
   if (['diasMes','cajasDia'].some(k => params.opex[k] <= 0)) return 'Días por mes y cajas por día deben ser mayores que cero.';
   if (!Number.isInteger(params.opex.tecnicos) || !Number.isInteger(params.opex.certMax) || params.opex.certMax < 1) return 'Técnicos y certificación máxima deben ser enteros.';
+  const o = params.opex;
+  if (!Number.isInteger(o.nodoTecnicos) || !Number.isInteger(o.nodoDias) || !Number.isInteger(o.nodoDiasMax) ||
+      o.nodoDiasMax < 1 || o.nodoDias < 1 || o.nodoDias > o.nodoDiasMax) return 'Revisa los parámetros de nodos: enteros, con días por defecto entre 1 y el máximo.';
   if (published && Object.keys(published).some(k => !(k in params))) return 'El archivo de parámetros es inválido.';
   return '';
 }
@@ -102,6 +125,9 @@ export function validateDraft(draft, branch, published) {
   if (draft?.schema === 1) throw Error('El borrador es de la versión 0.1.6 y no es compatible con esta versión. Vuelve a cargar las acciones.');
   if (draft?.schema !== 2 || draft.year !== 2026 || draft.branch !== branch.name || !Array.isArray(draft.actions)) {
     throw Error('El borrador no corresponde a esta sucursal, período o formato.');
+  }
+  if (draft.parameters?.opex) {
+    for (const [k, v] of Object.entries(nodeDefaults)) if (!(k in draft.parameters.opex)) draft.parameters.opex[k] = published?.opex?.[k] ?? v;
   }
   const error = parametersError(draft.parameters, published);
   if (error) throw Error(error);

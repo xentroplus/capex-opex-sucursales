@@ -1,10 +1,11 @@
-import {VERSION,branches,objectives,kinds,fibers,opexKeys,calculate,actionError,actionWarnings,parametersError,validateDraft,
-  excelRows,loadWorkbook,readDeliveries,writeWorkbook,fileName,sum,money,dayCost} from './core.mjs?v=0.1.7';
+import {VERSION,branches,objectives,kinds,kindsByObjective,isNodeKind,fibers,opexKeys,calculate,actionError,actionWarnings,parametersError,validateDraft,
+  excelRows,loadWorkbook,readDeliveries,writeWorkbook,fileName,sum,money,dayCost} from './core.mjs?v=0.1.8';
 const $ = id => document.getElementById(id);
 const fmt = new Intl.NumberFormat('es-EC',{style:'currency',currency:'USD'});
 const num = new Intl.NumberFormat('es-EC',{maximumFractionDigits:3});
 const opexLabels = {tecnicoMes:'Costo mensual por técnico ($)',coordinadorMes:'Costo mensual del coordinador ($)',diasMes:'Días por mes',
-  tecnicos:'Técnicos por cuadrilla',cajasDia:'Cajas por día',diasOdf:'Días por ODF',certMax:'Certificación máxima (días)'};
+  tecnicos:'Técnicos por cuadrilla',cajasDia:'Cajas por día',diasOdf:'Días por ODF',certMax:'Certificación máxima (días)',
+  nodoTecnicos:'Técnicos en nodos y generadores',nodoDias:'Días por defecto en nodos y generadores',nodoDiasMax:'Días máximos en nodos y generadores'};
 // This gate separates screens in the static MVP. GitHub permissions govern publication.
 const adminDigest = '3e81deb0c821d39bbddb1bef92f651287e5f2b670eb7dc893ba4f095028ffa51';
 let published, branch, draft, template, editing = null, form = null, previewDeliveries = [], previewKind = 'branch', view = 'branch';
@@ -38,6 +39,7 @@ function persist(next) {
 }
 const newDraft = () => ({schema:2,year:2026,branch:branch.name,parameters:published,actions:[]});
 const blankRoute = (base = {}) => ({obj:'crec',kind:'urbana',city:'',description:'',quarter:1,fibra:'48 hilos',metros:0,postes:0,bobina:2,cajas:0,cert:1,odf:false,...base});
+const blankNode = (base = {}) => ({obj:'nodos',kind:'nodo',city:'',description:'',quarter:1,capex:0,sustento:'',dias:draft.parameters.opex.nodoDias,...base});
 const blankBoxes = (base = {}) => ({obj:'crec',kind:'cajas',city:'',description:'',q:[0,1,2,3].map(() => ({cajas:0,metros:0})),...base});
 
 function selectView(next) {
@@ -98,12 +100,21 @@ function drawForm() {
   const city = element('input'); city.dataset.k = 'city'; city.maxLength = 120; city.value = f.city;
   const description = element('textarea'); description.dataset.k = 'description'; description.maxLength = 1200; description.rows = 2; description.value = f.description;
   const children = [grid(
-    field('Objetivo estratégico','',select('obj',Object.entries(objectives).map(([k,v]) => [k, k === 'nodos' ? v + ' (por definir)' : v]),f.obj)),
-    field('Tipo de trabajo','',select('kind',Object.entries(kinds),f.kind)),
+    field('Objetivo estratégico','',select('obj',Object.entries(objectives),f.obj)),
+    field('Tipo de trabajo','',select('kind',kindsByObjective[f.obj].map(k => [k,kinds[k]]),f.kind)),
     field('Acciones generales','ciudad',city)),
     field('Acción específica','descripción',description)];
-  if (f.obj === 'nodos') {
-    children.push(element('p','La regla de cálculo de Mejoramiento Infraestructura de Nodos está por definir. Por ahora no se puede guardar este tipo de acción.','warn err'));
+  if (isNodeKind(f.kind)) {
+    const sustento = element('input'); sustento.dataset.k = 'sustento'; sustento.maxLength = 200; sustento.value = f.sustento;
+    sustento.placeholder = 'Material eléctrico, UPS, baterías, rack…';
+    children.push(element('h3','Trimestre','section'),
+      grid(field('Trimestre de ejecución','',select('quarter',[[1,'1Q'],[2,'2Q'],[3,'3Q'],[4,'4Q']],f.quarter))),
+      element('h3','Datos para CAPEX','section'),
+      grid(field('Monto CAPEX','USD',numberInput('capex',f.capex,'0.01'))),
+      field('Sustento del CAPEX','qué incluye',sustento),
+      element('h3','Datos para OPEX','section'),
+      grid(field('Días de trabajo','días',select('dias',Array.from({length:p.opex.nodoDiasMax},(_,i) => [i+1,String(i+1)]),f.dias))),
+      element('p',`El CAPEX se ingresa a mano. El sustento queda guardado en la app y en el borrador como respaldo del monto; no se escribe en el Excel. El OPEX considera ${p.opex.nodoTecnicos} técnicos sin coordinador; ${p.opex.nodoDias} días es el valor de referencia.`,'hint'));
   } else if (f.kind === 'cajas') {
     children.push(element('h3','Cantidades por trimestre','section'));
     const q = element('div',undefined,'qgrid');
@@ -135,13 +146,15 @@ function readField(target) {
   const k = target.dataset.k; if (!k) return false;
   if (target.dataset.q !== undefined) { form.q[Number(target.dataset.q)][k] = Math.max(0,target.valueAsNumber || 0); return false; }
   if (k === 'obj' || k === 'kind') {
-    const base = {city:form.city,description:form.description,obj:k === 'obj' ? target.value : form.obj};
-    const kind = k === 'kind' ? target.value : form.kind;
-    form = kind === 'cajas' ? blankBoxes({...base,kind}) : blankRoute({...base,kind});
+    const obj = k === 'obj' ? target.value : form.obj;
+    const kind = k === 'kind' ? target.value : kindsByObjective[obj][0];
+    const base = {city:form.city,description:form.description,obj,kind};
+    form = isNodeKind(kind) ? blankNode(base) : kind === 'cajas' ? blankBoxes(base) : blankRoute(base);
     return true;
   }
   if (['metros','postes','cajas'].includes(k)) form[k] = Math.max(0,target.valueAsNumber || 0);
-  else if (['quarter','bobina','cert'].includes(k)) form[k] = Number(target.value);
+  else if (k === 'capex') form.capex = Math.max(0,money(target.valueAsNumber || 0));
+  else if (['quarter','bobina','cert','dias'].includes(k)) form[k] = Number(target.value);
   else if (k === 'odf') form.odf = target.value === 'si';
   else form[k] = target.value;
   return false;
@@ -152,19 +165,22 @@ function liveTotal() {
   const p = draft.parameters, notes = [];
   const action = {...form,city:form.city.trim(),description:form.description.trim()};
   const error = actionError({...action,city:action.city || '-',description:action.description || '-'},p);
-  if (form.obj === 'nodos' || error) {
+  if (error) {
     $('capex-total').textContent = $('opex-total').textContent = '—';
     $('capex-lines').replaceChildren(element('p','Completa los datos para ver el cálculo.','muted'));
     $('opex-lines').replaceChildren(element('p','Completa los datos para ver el cálculo.','muted'));
-    if (error && form.obj !== 'nodos') notes.push(element('p',error,'warn'));
+    notes.push(element('p',error,'warn'));
   } else {
     const r = calculate(action,p);
     $('capex-total').textContent = fmt.format(r.capex); $('opex-total').textContent = fmt.format(r.opex);
     $('capex-lines').replaceChildren(...r.capexLines.map(l => line(l.label.replace(/\d+(\.\d+)?(?= m| km| ×| ÷|$)/g,m => num.format(Number(m))),fmt.format(l.value))),
       line('Total CAPEX' + (form.kind === 'cajas' ? '' : ' en ' + form.quarter + 'Q'),fmt.format(r.capex),'line sum'));
+    const hint = isNodeKind(form.kind)
+      ? `Costo por día: ${p.opex.nodoTecnicos} técnicos × ${fmt.format(p.opex.tecnicoMes / p.opex.diasMes)}, sin coordinador.`
+      : `Costo por día: ${p.opex.tecnicos} técnicos × ${fmt.format(p.opex.tecnicoMes / p.opex.diasMes)} + coordinador ${fmt.format(p.opex.coordinadorMes / p.opex.diasMes)}.`;
     $('opex-lines').replaceChildren(...r.opexLines.map(l => line(l.label.replace(/\d+\.\d+/g,m => num.format(Number(m))),l.days + (l.days === 1 ? ' día' : ' días'))),
       line(r.days + (r.days === 1 ? ' día × ' : ' días × ') + fmt.format(money(r.perDay)) + ' por día',fmt.format(r.opex),'line sum'),
-      element('p',`Costo por día: ${p.opex.tecnicos} técnicos × ${fmt.format(p.opex.tecnicoMes / p.opex.diasMes)} + coordinador ${fmt.format(p.opex.coordinadorMes / p.opex.diasMes)}.`,'hint'));
+      element('p',hint,'hint'));
     for (const w of actionWarnings(action)) notes.push(element('p',w,'warn'));
   }
   $('form-notes').replaceChildren(...notes);

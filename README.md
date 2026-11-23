@@ -1,6 +1,6 @@
 # CAPEX y OPEX 2026
 
-MVP 0.1.7 para las 14 Técnicas Sucursales. Aplicación estática para GitHub Pages.
+MVP 0.1.8 para las 14 Técnicas Sucursales. Aplicación estática para GitHub Pages.
 
 ## Prueba local
 
@@ -28,7 +28,11 @@ Replican la hoja 2026 y la primera calculadora de la pestaña Calculo OPEX del a
 - CAPEX por trimestre = metros de fibra 2 hilos × tarifa de 2 hilos.
 - OPEX por trimestre = cajas ÷ cajas por día (redondeo hacia arriba) × costo diario de la cuadrilla.
 
-**Mejoramiento Infraestructura de Nodos**: regla por definir; la app no permite guardar este tipo de acción.
+**Mejoramiento Infraestructura de Nodos** (tipos: Construcción y/o migración de nodo, Instalación de generador; un trimestre):
+
+- CAPEX = monto ingresado a mano, con un sustento obligatorio (material eléctrico, UPS, baterías…) que queda en la app y en el borrador. La acción específica del Excel es solo el texto que escribe la jefatura.
+- OPEX = días (1 a 4, 2 por defecto) × técnicos de nodos (3) × costo mensual del técnico ÷ días por mes. No participa el coordinador.
+- Técnicos, días por defecto y días máximos de nodos se editan en Parámetros generales.
 
 ## Flujo de jefatura
 
@@ -38,7 +42,7 @@ Replican la hoja 2026 y la primera calculadora de la pestaña Calculo OPEX del a
 4. **Limpiar todo** borra la planificación local de la sucursal tras pedir confirmación.
 5. Carga el **FORMATO CAPEX OPEX 2026v2.xlsx** original, abre **Ver vista previa** y descarga el Excel de la sucursal para la entrega.
 
-Los borradores de la versión 0.1.6 no son compatibles: hay que volver a cargar las acciones.
+Los borradores de la versión 0.1.7 siguen funcionando. Los de la versión 0.1.6 no son compatibles: hay que volver a cargar las acciones.
 
 ## Flujo de revisión
 

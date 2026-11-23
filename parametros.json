@@ -1,14 +1,14 @@
 {
-  "version": "2026.2",
+  "version": "2026.3",
   "capex": {
     "fibras": {
-      "2 hilos": 0.40,
+      "2 hilos": 0.4,
       "6 hilos": 1.63,
-      "6 hilos ducto": 1.80,
+      "6 hilos ducto": 1.8,
       "48 hilos": 2.23,
       "48 hilos ducto": 2.42,
       "144 hilos": 3.42,
-      "144 hilos ducto": 3.60
+      "144 hilos ducto": 3.6
     },
     "poste": 305
   },
@@ -19,6 +19,9 @@
     "tecnicos": 2,
     "cajasDia": 8,
     "diasOdf": 1,
-    "certMax": 2
+    "certMax": 2,
+    "nodoTecnicos": 3,
+    "nodoDias": 2,
+    "nodoDiasMax": 4
   }
 }
